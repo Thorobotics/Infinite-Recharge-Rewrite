@@ -9,8 +9,9 @@ package frc.robot;
 
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
-import frc.robot.Subsystems.CameraServerGroup;
-import frc.robot.Subsystems.Map;
+import frc.robot.Subsystems.CameraServerGroup;    // current sensing, pathweaver 
+import frc.robot.Subsystems.Map;                    // https://blog.alexbeaver.com/wpilib-trajectory-guide/
+import edu.wpi.first.wpilibj.util.Color;                    //  ^-- for pathweaver
 
 /**
  * The VM is configured to automatically run this class, and to call the
@@ -54,6 +55,7 @@ public class Robot extends TimedRobot {
 
   @Override
   public void autonomousPeriodic() {
+    map.chassis().arcadeDrive(0.6, 0.0);
   }
 
   @Override
@@ -63,11 +65,20 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
 
+    boolean toggleIntake = map.controller().getXButtonPressed();
+    boolean drawbridgeUp = map.controller().getBumper(Hand.kLeft);
+    boolean drawbridgeDown = map.controller().getBumper(Hand.kRight);
+    boolean startSpinnerButton = map.controller().getYButtonPressed();
+    boolean spinnerArmUp = map.controller().getAButton();
+    boolean spinnerArmDown = map.controller().getBButton();
+    boolean spinnerWheelLeft = map.controller().getBumperPressed(Hand.kLeft);
+    boolean spinnerWheelRight = map.controller().getBumperPressed(Hand.kRight);
+
     // Drives the robot based on joystick
     map.chassis().arcadeDrive(map.controller().getRawAxis(Map.Y_AXIS), map.controller().getRawAxis(Map.X_AXIS));
 
     // Toggle intake on and off if x button pressed
-    if(map.controller().getXButtonPressed()) {
+    if(toggleIntake) {
       // If balls hit the limit, stop the intake
       if (ballsInHopper > 5) {
         map.intake().set(0.0);
@@ -84,13 +95,22 @@ public class Robot extends TimedRobot {
     }
 
     // Move drawbridge up and down with left and right bumpers
-    if (map.controller().getBumper(Hand.kLeft)) {
-      map.drawbridge().set(1.0);
-    } else if (map.controller().getBumper(Hand.kRight)) {
-      map.drawbridge().set(-1.0);   // Speeds may need to change
+    if (drawbridgeUp) {
+      if(!map.bridgeUpper().get()) {
+        map.drawbridge().set(1.0);
+      }  
+      map.stopControllerRumble(); 
+    } else if (drawbridgeDown) {
+      if(!map.bridgeLower().get()) {
+        map.drawbridge().set(-1.0);   // Speeds may need to change
+      }
+      map.stopControllerRumble();
+    } else if (!map.bridgeReady().get()) {
       ballsInHopper = 0;           // Assumes that bringing up the door means that hopper has been emptied
+      map.rumbleController();
     } else { // If no bumpers pressed, stop the drawbridge moving
       map.drawbridge().set(0.0);
+      map.stopControllerRumble();
     }
 
     // Check count for ball counter limit switch
@@ -104,36 +124,45 @@ public class Robot extends TimedRobot {
       }
     }
 
-    // Check if the spinner should start finding the color
-    if (map.controller().getYButtonPressed()) {
+
+
+    // Move the spinner arm up and down with buttons
+    if (spinnerArmUp) {
+      if (!map.armUpper().get()) {
+        map.spinner().moveArm(-1.0);
+      } else {
+            // Check if the spinner should start finding the color
+    if (startSpinnerButton) {
       isFindingColor = true;
     }
 
     // Check if the spinner is finding the color
     if (isFindingColor) {
-      if (map.spinner().findColor(null)) { // Need to change 
+      if (map.spinner().findColor(Color.kBlue)) { // Need to change 
         isFindingColor = true;
       } else {
         isFindingColor = false;
       }
-    }
-
-    // Move the spinner arm up and down with buttons
-    if (map.controller().getAButton()) {
-      map.spinner().moveArm(-1.0);
-    } else if (map.controller().getBButton()) {
-      map.spinner().moveArm(1.0); //Change values
+    } else {
+        // Move the spinner wheel left and right manually
+        if (spinnerWheelLeft) {
+          map.spinner().moveWheel(-1.0); // Change values
+        } else if (spinnerWheelRight) {
+          map.spinner().moveWheel(1.0);
+        } else {
+          map.spinner().moveWheel(0.0);
+        }
+      }
+        map.rumbleController();
+      }
+    } else if (spinnerArmDown) {
+      if (!map.armLower().get()) {
+        map.spinner().moveArm(1.0); //Change values
+      }
+      map.stopControllerRumble();
     } else {
       map.spinner().moveArm(0.0);
-    }
-
-    // Move the spinner wheel left and right manually
-    if (map.controller().getBumperPressed(Hand.kLeft)) {
-      map.spinner().moveWheel(-1.0); // Change values
-    } else if (map.controller().getBumperPressed(Hand.kRight)) {
-      map.spinner().moveWheel(1.0);
-    } else {
-      map.spinner().moveWheel(0.0);
+      map.stopControllerRumble();
     }
 
   }
